@@ -1,0 +1,80 @@
+groups:
+- name: "compute"
+  sensors:
+  - inlet_temp
+  - avg_cpu_temp
+  - health
+  - total_power
+  - dc_energy
+# - cpu_power
+# - mem_power
+
+- name: "smms"
+  sensors:
+  - health
+
+labels:
+- rack
+- nodetype
+
+port: 13101
+collective: False
+
+### Lenovo Confluent prometheus exporter ###
+# The exporter uses the Cofluent client to query nodes sensors and health
+#
+# Sensors are defined per group under the groups statement. each group
+# entry is defined by the group name and list of sensors to collect. 
+# While nodes can be in multiple groups, the exporter will perform only one 
+# collection per node per sensor 
+#
+# groups:
+# - name: "group1"
+#   sensors:
+#   - inlet_temp
+#   - avg_cpu_temp
+#   - health
+#   - total_power
+#   - dc_energy
+#
+# - name: "group2"  # useful for devices such as enclosure managers/SMMs
+#   sensors:
+#   - health
+# 
+# Current supported sensors:
+# total_power - Total node current power consumption (Watt)
+# avg_cpu_temp - Average CPU temperature (Celsius)
+# inlet_temp - Server inlet air temperature (Celsius)
+# health - Node health status - OK (0) / Warning (1) / Critical or Failed (2) / Unknown, or Error in fetching (3)
+# dc_energy - Total DC Energy consumed by the node (kWh)
+# cpu_power - Node CPU power consumption (Watt)
+# mem_power - Node Memory power consumption (Watt)
+#
+#
+# Adding lables to nodes: 
+# note - it is better to minimize the number of labels
+# By default the exporter will add the 'node' label with the node name.
+# Additional labels can be added in the following way - 
+# add the labels section with list of labels
+#
+# labels:
+# - rack
+# - nodetype
+#
+# Add corresponding attribute to node with the following format - 
+# custom.labels.<label name>
+#
+# For example:
+# nodeattrib rack1 custom.lables.rack=rack1
+# nodeattrib service custom.lables.nodetype=service
+#
+#
+# Port: by default the exporter will use 13101, but it can be change with 
+# port: <port num>
+#
+#
+# Collective:
+# Setting collective to True will ensure that each confluent server will collect 
+# only from nodes where the node is the current active collective manager. 
+# collective: True
+# Default is to ignore collective (False)

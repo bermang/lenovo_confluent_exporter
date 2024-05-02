@@ -1,0 +1,10 @@
+[Unit]
+Description=Lenovo Confluent Exporter
+
+[Service]
+User=confluent
+Restart=always
+ExecStart=/usr/sbin/confluent_exporter -f /etc/confluent/exporter/config.yaml
+
+[Install]
+WantedBy=multi-user.target

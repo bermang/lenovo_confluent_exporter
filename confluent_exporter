@@ -1,0 +1,176 @@
+#!/usr/bin/env python
+import argparse
+import os
+import sys
+import yaml
+
+sys.path.append('/opt/confluent/lib/python')
+import confluent.client as client
+
+import time
+import yaml
+from prometheus_client.core import GaugeMetricFamily, REGISTRY, CounterMetricFamily
+from prometheus_client import start_http_server
+
+
+_sensorpath = {
+    'total_power': { 'path': '/sensors/hardware/normalized/total_power', 
+                        'metric_name': 'total_power_watts',
+                        'help_msg': 'Node total power consumption (Watt)' },
+    'avg_cpu_temp':  { 'path': '/sensors/hardware/normalized/average_cpu_temp', 
+                        'metric_name': 'avg_cpu_temp',
+                        'help_msg': 'Average CPU temperature (Celsius)' },
+    'inlet_temp': { 'path': '/sensors/hardware/normalized/inlet_temp',
+                        'metric_name': 'inlet_temp',
+                        'help_msg': 'Server inlet air temperature (Celsius)' },
+    'health': { 'path': '/health/hardware',
+                        'metric_name': 'health',
+                        'help_msg': 'Node health status - OK (0) / Warning (1) / Critical or Failed (2) / Unknown, or Error in fetching (3)' },
+    'dc_energy': { 'path': '/sensors/hardware/energy/dc_energy',
+                        'metric_name': 'dc_energy_kWh',
+                        'help_msg': 'DC Energy consumed by the node (kWh)' },
+    'cpu_power': { 'path': '/sensors/hardware/power/cpu_power',
+                        'metric_name': 'cpu_energy_watts',
+                        'help_msg': 'Node CPU power consumption (Watt)' },
+    'mem_power': { 'path': '/sensors/hardware/power/mem_power',
+                        'metric_name': 'mem_power_watts',
+                        'help_msg': 'Node Memory power consumption (Watt)' },
+}
+
+codemappings = {
+    'ok': 0,
+    'warning': 1,
+    'critical': 2,
+    'failed': 2,
+    'unknown': 3,
+}
+
+sensors = {}
+met_labels = []
+port = "13101"
+
+class CustomCollector(object):
+    def __init__(self):
+        pass
+    
+    def node_labels(self, node):
+        session = client.Command()
+        path = '/nodes/{0}/attributes/current'.format(node)
+        node_labels = []
+        d = {}
+        for ent in session.read(path):
+            for attr in ent:
+                if attr.startswith('custom.labels.'):
+                     d.update({ attr[14:] : ent[attr]['value'] })
+        for label in met_labels:
+            node_labels.append(d.get(label,''))
+        return node_labels
+        
+    
+    def collect(self):
+        metrics = {}
+        session = client.Command()  
+        for sensor, path in sensors.items():
+            for reading in session.read(path):
+                if sensor == 'health':
+                    continue
+                if 'error' in reading:
+                    sys.stderr.write('Error: {0}\n'.format(reading['error']))
+                if 'databynode' not in reading:
+                    continue
+                metrics[sensor] = GaugeMetricFamily(_sensorpath[sensor]['metric_name'], 
+                                            _sensorpath[sensor]['help_msg'], labels=['node'] + met_labels)
+                reading = reading['databynode']
+                for node in reading:
+                    if 'error' in reading[node]:
+                        sys.stderr.write('{0}: Error: {1}\n'.format(node, reading[node]['error']))
+                    if 'sensors' not in reading[node]:
+                        continue
+                    value = reading[node]['sensors'][0]['value']
+                    n_labels = []
+                    if met_labels:
+                        n_labels =  self.node_labels(node)
+                    metrics[sensor].add_metric([node] + n_labels, value)
+                    yield metrics[sensor]
+        if 'health' in sensors:
+            sensor = 'health'
+            for health in session.read(sensors['health']):
+                if 'error' in health:
+                    sys.stderr.write(health['error'] + '\n')
+                if 'databynode' not in health:
+                    continue
+                health = health['databynode']
+                metrics[sensor] = GaugeMetricFamily(_sensorpath[sensor]['metric_name'], 
+                                            _sensorpath[sensor]['help_msg'], labels=['node','state'] + met_labels)        
+                for node in health:
+                    if 'error' in health[node]:
+                        sys.stderr.write('{0}: Error: {1}\n'.format(node, health[node]['error']))
+                        metrics[sensor].add_metric([node, 'error'], 3)
+                    if 'health' in health[node]:
+                        state = health[node]['health']['value']
+                        value = codemappings[state]
+                        n_lables = []
+                        if met_labels:
+                            n_labels =  self.node_labels(node)
+                        metrics[sensor].add_metric([node, state] + n_labels, value)
+                        yield metrics[sensor]
+
+
+def parse_config_file(config, myname):
+    global port
+    global met_labels
+    if 'port' in config.keys():
+        port = config['port']
+    for group in config['groups']:
+        for sensor in group['sensors']:
+            if sensor not in sensors:
+                sensors[sensor] = group['name']    
+            else:
+                sensors[sensor] = sensors[sensor] + ',' + group['name'] 
+    if 'collective' in config.keys():
+        if config['collective']:
+            for k, v in sensors.items():
+                sensors[k] = sensors[k] + '@collective.manager=={0}'.format(myname)
+    # finally, value is the api path
+    for k in sensors:
+        sensors[k] = '/noderange/' + sensors[k] + _sensorpath[k]['path']
+    met_labels = config.get('labels')
+    if not met_labels:
+        met_labels = []    
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Lenovo Confluent Prometheus Exporter")
+    ap.add_argument('-f', '--configfile', help='Exporter configuration file, defaults to /etc/confluent/exporter/config.yaml', default='/etc/confluent/exporter/config.yaml')
+    args = ap.parse_args()
+    
+    try:
+        with open('/etc/confluent/cfg/myname', 'r') as f:
+            myname = f.read().strip()
+    except IOError:
+        import socket
+        myname = socket.gethostname().split('.')[0]
+    
+    configfile = args.configfile
+    ## Do i need it?? looks like it will defualt into stderr and exit
+    try:
+        with open(configfile, 'r') as file:
+            config = yaml.safe_load(file)
+    except OSError as e:
+        sys.stderr.write(e)
+        sys.exit(1)
+    
+    parse_config_file(config, myname)
+    
+    if not sensors:
+        sys.stderr.write('No sensors defined')
+        sys.exit(1) 
+
+    start_http_server(port)
+    REGISTRY.register(CustomCollector())
+    while True: 
+        time.sleep(10)
+ 
+
+if __name__ == '__main__':
+    main()
