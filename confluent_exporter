@@ -152,7 +152,7 @@ def main():
         myname = socket.gethostname().split('.')[0]
     
     configfile = args.configfile
-    ## Do i need it?? looks like it will defualt into stderr and exit
+    
     try:
         with open(configfile, 'r') as file:
             config = yaml.safe_load(file)
