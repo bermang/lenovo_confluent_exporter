@@ -1,6 +1,25 @@
 # Lenovo Confluent Prometheus Exporter
 
-This exporter uses the Confluent python client to query nodes sensors and health status. 
+This simple exporter use the Lenovo Confluent and Prometheus python clients to query and export nodes sensors and health status.<br> 
+
+## Installtion
+Install the prometheus-client (https://github.com/prometheus/client_python) 
+```
+pip install prometheus-client
+```
+<br>
+Run the script directly or as a systemd service (see example systemd unit file)
+```
+/usr/sbin/confluent_exporter -f /etc/confluent/exporter/config.yaml
+```
+<br><br>
+The bahviour of the exporter is customized using a yaml configuration file. By default the exporter will look for `etc/confluent/exporter/config.yaml. <br>
+To specify different file:  
+```
+'-f', '--configfile', Exporter configuration file, defaults to /etc/confluent/exporter/config.yaml
+```
+Exporter and configuration file should be owned by the Confluent user. 
+
 Sensors are defined per group under the _groups_ statement. each group entry is defined by the group name and list of sensors to collect. While nodes can be in multiple groups, the exporter will perform only one collection per node per sensor 
 ```
 groups:
@@ -25,7 +44,7 @@ groups:
 **dc_energy** - Total DC Energy consumed by the node (kWh)<br>
 **cpu_power** - Node CPU power consumption (Watt)<br>
 **mem_power** - Node Memory power consumption (Watt)<br>
-
+Adding sensors is trivial. More sensors will be added soon.<br> 
 
 #### Adding lables to nodes: 
 `note` - it is better to minimize the number of labels. By default the exporter will add the 'node' label with the node name.
