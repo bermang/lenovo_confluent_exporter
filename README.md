@@ -17,9 +17,10 @@ pip install prometheus-client
 <br>The behavior of the exporter is customized using a yaml configuration file. By default, the exporter will look for `etc/confluent/exporter/config.yaml`. <br>
 <br>To specify different file:  
 ```
-'-f', '--configfile', Exporter configuration file, defaults to /etc/confluent/exporter/config.yaml
+/path/to/confluent_exporter [-f | --configfile] <config file>
 ```
-Exporter and configuration file should be owned by the Confluent user.<br><br>
+Default is /etc/confluent/exporter/config.yaml
+<br>Exporter and configuration file should be owned by the Confluent user.<br><br>
 
 ## Configuration
 ### Sensors
