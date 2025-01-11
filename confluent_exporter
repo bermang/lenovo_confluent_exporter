@@ -84,9 +84,12 @@ class CustomCollector(object):
                 for node in reading:
                     if 'error' in reading[node]:
                         sys.stderr.write('{0}: Error: {1}\n'.format(node, reading[node]['error']))
+                        continue
                     if 'sensors' not in reading[node]:
                         continue
                     value = reading[node]['sensors'][0]['value']
+                    if not value:
+                        continue
                     n_labels = []
                     if met_labels:
                         n_labels =  self.node_labels(node)
@@ -123,6 +126,9 @@ def parse_config_file(config, myname):
         port = config['port']
     for group in config['groups']:
         for sensor in group['sensors']:
+            if sensor not in _sensorpath:
+                sys.stderr.write('{0} is not a valid sensor name '.format(sensor))
+                sys.exit(1)
             if sensor not in sensors:
                 sensors[sensor] = group['name']    
             else:
